@@ -341,12 +341,42 @@ EMSCRIPTEN_BINDINGS(physx)
       .value("eLIMITED", PxD6Motion::Enum::eLIMITED)
       .value("eFREE", PxD6Motion::Enum::eFREE);
 
+  class_<PxD6JointDrive>("PxD6JointDrive")
+      .constructor<>()
+      .constructor<PxReal,PxReal,PxReal,bool>()
+      .property("forceLimit", &PxD6JointDrive::forceLimit)
+      .function("setAccelerationFlag", optional_override([](PxD6JointDrive& drive, bool enabled) {
+        if (enabled) {
+          drive.flags.set(PxD6JointDriveFlag::Enum::eACCELERATION);
+        }
+        else
+        {
+          drive.flags.clear(PxD6JointDriveFlag::Enum::eACCELERATION);
+        }
+      }))
+      .function("setStiffness", optional_override([](PxD6JointDrive& c, PxReal stiffness){ return c.stiffness = stiffness; }))
+      .function("getStiffness", optional_override([](PxD6JointDrive& c){ return c.stiffness; }))
+      .function("setDamping", optional_override([](PxD6JointDrive& c, PxReal damping){ return c.damping = damping; }))
+      .function("getDamping", optional_override([](PxD6JointDrive& c){ return c.damping; }));
+      ;
+
+  enum_<PxD6Drive::Enum>("PxD6Drive")
+      .value("eX", PxD6Drive::Enum::eX)
+      .value("eY", PxD6Drive::Enum::eY)
+      .value("eZ", PxD6Drive::Enum::eZ)
+      .value("eSWING", PxD6Drive::Enum::eSWING)
+      .value("eTWIST", PxD6Drive::Enum::eTWIST)
+      .value("eSLERP", PxD6Drive::Enum::eSLERP);
+
   class_<PxD6Joint, base<PxJoint>>("PxD6Joint")
       .function("setMotion", &PxD6Joint::setMotion)
       .function("getMotion", &PxD6Joint::getMotion)
       .function("setLinearLimit", select_overload<void(PxD6Axis::Enum, const PxJointLinearLimitPair&)>(&PxD6Joint::setLinearLimit))
       .function("setTwistLimit", &PxD6Joint::setTwistLimit)
       .function("setSwingLimit", &PxD6Joint::setSwingLimit)
+      .function("setDrive", &PxD6Joint::setDrive)
+      .function("setDrivePosition", select_overload<void(const PxTransform&, bool)>(&PxD6Joint::setDrivePosition))
+      .function("setDriveVelocity", select_overload<void(const PxVec3&, const PxVec3&, bool)>(&PxD6Joint::setDriveVelocity))
       ;
 
 
