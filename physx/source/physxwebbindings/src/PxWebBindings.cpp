@@ -70,10 +70,7 @@ struct PxSimulationEventCallbackWrapper : public wrapper<PxSimulationEventCallba
     for(PxU32 i=0; i<count; i++)
     {
       PxJoint* joint = reinterpret_cast<PxJoint*>(constraints[i].externalReference);
-      PxRigidActor* actor0 = NULL;
-	    PxRigidActor* actor1 = NULL;
-      joint->getActors(actor0, actor1);
-      call<void>("onConstraintBreak", actor0, actor1);
+      call<void>("onConstraintBreak", joint);
     }
   }
   void onWake(PxActor **, PxU32) {}
@@ -161,6 +158,12 @@ PxFilterFlags LayerMaskFilterShader(
     return PxFilterFlag::eDEFAULT;
   }
 
+  // Collision group ids. Prevent objects in same collision "object" from self-colliding
+  if (filterData0.word2 > 0 && filterData1.word2 > 0 && filterData0.word2 == filterData1.word2)
+  {
+    return PxFilterFlag::eSUPPRESS;
+  }
+
   // Support collision matrix layers
   // word0: the layer - eg 1 << 16 (16th bit 1 all others 0)
   // word1: the mask - each active bit is a layer that collides with this
@@ -233,6 +236,16 @@ PxTriangleMesh* createTriMesh(int vertices, PxU32 vertCount, int indices, PxU32 
   return triangleMesh;
 }
 
+namespace emscripten {
+namespace internal {
+  // Deal with base classes with protected destructors. You can't construct
+  // these in JS anyway, so shouldn't cause a leak
+  template<> void raw_destructor(PxConstraint*) {};
+  template<> void raw_destructor(PxJointLimitParameters*){};
+  template<> void raw_destructor(PxSpring*){};
+}
+}
+
 EMSCRIPTEN_BINDINGS(physx)
 {
 
@@ -265,56 +278,55 @@ EMSCRIPTEN_BINDINGS(physx)
       .value("eBROKEN", PxConstraintFlag::Enum::eBROKEN)
       .value("eCOLLISION_ENABLED", PxConstraintFlag::Enum::eCOLLISION_ENABLED)
       .value("ePROJECTION", PxConstraintFlag::ePROJECTION);
-  //
-  // value_object<PxSpring>("PxSpring")
-  //   .field("stiffness", &PxSpring::stiffness)
-  //   .field("damping", &PxSpring::damping);
 
-  // value_object<PxJointLimitParameters>("PxJointLimitParameters")
-      // .field("restitution", &PxJointLimitParameters::restitution);
+  class_<PxSpring>("PxSpring")
+    .property("stiffness", &PxSpring::stiffness)
+    .property("damping", &PxSpring::damping);
 
-  // class_<PxJointLimitParameters>("PxJointLimitParameters");
+  class_<PxJointLimitParameters>("PxJointLimitParameters")
+      .property("restitution", &PxJointLimitParameters::restitution)
+      .property("damping", &PxJointLimitParameters::damping)
+      .property("stiffness", &PxJointLimitParameters::restitution)
+      .property("bounceThreshold", &PxJointLimitParameters::bounceThreshold)
+      .property("contactDistance", &PxJointLimitParameters::contactDistance)
+      .function("isValid", &PxJointLimitParameters::isValid)
+      .function("isSoft", &PxJointLimitParameters::isSoft);
 
-  class_<PxJointLimitCone>("PxJointLimitCone")
+
+  class_<PxJointLimitCone, base<PxJointLimitParameters>>("PxJointLimitCone")
       .constructor<PxReal,PxReal>().constructor<PxReal,PxReal,PxReal>()
       .property("yAngle", &PxJointLimitCone::yAngle)
-      .property("zAngle", &PxJointLimitCone::zAngle)
-      .function("setStiffness", optional_override([](PxJointLimitCone& c, PxReal stiffness){ return c.stiffness = stiffness; }))
-      .function("getStiffness", optional_override([](PxJointLimitCone& c){ return c.stiffness; }))
-      .function("setRestitution", optional_override([](PxJointLimitCone& c, PxReal restitution){ return c.restitution = restitution; }))
-      .function("getRestitution", optional_override([](PxJointLimitCone& c){ return c.restitution; }))
-      .function("setDamping", optional_override([](PxJointLimitCone& c, PxReal damping){ return c.damping = damping; }))
-      .function("getDamping", optional_override([](PxJointLimitCone& c){ return c.damping; }));
+      .property("zAngle", &PxJointLimitCone::zAngle);
 
-  class_<PxJointLinearLimitPair>("PxJointLinearLimitPair")
+  class_<PxJointLinearLimitPair, base<PxJointLimitParameters>>("PxJointLinearLimitPair")
       .constructor<const PxTolerancesScale&, PxReal, PxReal>()
       .constructor<const PxTolerancesScale&, PxReal, PxReal, PxReal>()
       .property("upper", &PxJointLinearLimitPair::lower)
-      .property("lower", &PxJointLinearLimitPair::upper)
+      .property("lower", &PxJointLinearLimitPair::upper);
 
-      .function("setStiffness", optional_override([](PxJointLinearLimitPair& c, PxReal stiffness){ return c.stiffness = stiffness; }))
-      .function("getStiffness", optional_override([](PxJointLinearLimitPair& c){ return c.stiffness; }))
-      .function("setRestitution", optional_override([](PxJointLinearLimitPair& c, PxReal restitution){ return c.restitution = restitution; }))
-      .function("getRestitution", optional_override([](PxJointLinearLimitPair& c){ return c.restitution; }))
-      .function("setDamping", optional_override([](PxJointLinearLimitPair& c, PxReal damping){ return c.damping = damping; }))
-      .function("getDamping", optional_override([](PxJointLinearLimitPair& c){ return c.damping; }));
-
-  class_<PxJointAngularLimitPair>("PxJointAngularLimitPair")
+  class_<PxJointAngularLimitPair, base<PxJointLimitParameters>>("PxJointAngularLimitPair")
       .constructor<PxReal,PxReal>().constructor<PxReal,PxReal,PxReal>()
       .property("upper", &PxJointAngularLimitPair::upper)
-      .property("lower", &PxJointAngularLimitPair::lower)
+      .property("lower", &PxJointAngularLimitPair::lower);
 
-      .function("setStiffness", optional_override([](PxJointAngularLimitPair& c, PxReal stiffness){ return c.stiffness = stiffness; }))
-      .function("getStiffness", optional_override([](PxJointAngularLimitPair& c){ return c.stiffness; }))
-      .function("setRestitution", optional_override([](PxJointAngularLimitPair& c, PxReal restitution){ return c.restitution = restitution; }))
-      .function("getRestitution", optional_override([](PxJointAngularLimitPair& c){ return c.restitution; }))
-      .function("setDamping", optional_override([](PxJointAngularLimitPair& c, PxReal damping){ return c.damping = damping; }))
-      .function("getDamping", optional_override([](PxJointAngularLimitPair& c){ return c.damping; }));
+  class_<PxConstraint>("PxConstraint")
+      .function("getLinearForce", optional_override([](PxConstraint& c) {
+        PxVec3 l; PxVec3 v;
+        c.getForce(l, v);
+        return l;
+      }))
+      .function("getAngularForce", optional_override([](PxConstraint& c) {
+        PxVec3 l; PxVec3 v;
+        c.getForce(l, v);
+        return v;
+      }))
+      .function("setBreakForce", optional_override([](PxConstraint& c, PxReal linear, PxReal angular) {c.setBreakForce(linear, angular);}));
 
   class_<PxJoint>("PxJoint")
       .function("release", &PxJoint::release)
-      .function("setBreakForce", &PxJoint::setBreakForce)
-      .function("setConstraintFlag", &PxJoint::setConstraintFlag);
+      .function("setBreakForce", optional_override([](PxJoint& c, PxReal linear, PxReal angular) {c.setBreakForce(linear, angular);}))
+      .function("setConstraintFlag", &PxJoint::setConstraintFlag)
+      .function("getConstraint", &PxJoint::getConstraint, allow_raw_pointers());
 
   enum_<PxSphericalJointFlag::Enum>("PxSphericalJointFlag")
       .value("eLIMIT_ENABLED", PxSphericalJointFlag::eLIMIT_ENABLED);
@@ -341,7 +353,7 @@ EMSCRIPTEN_BINDINGS(physx)
       .value("eLIMITED", PxD6Motion::Enum::eLIMITED)
       .value("eFREE", PxD6Motion::Enum::eFREE);
 
-  class_<PxD6JointDrive>("PxD6JointDrive")
+  class_<PxD6JointDrive, base<PxSpring>>("PxD6JointDrive")
       .constructor<>()
       .constructor<PxReal,PxReal,PxReal,bool>()
       .property("forceLimit", &PxD6JointDrive::forceLimit)
@@ -354,10 +366,6 @@ EMSCRIPTEN_BINDINGS(physx)
           drive.flags.clear(PxD6JointDriveFlag::Enum::eACCELERATION);
         }
       }))
-      .function("setStiffness", optional_override([](PxD6JointDrive& c, PxReal stiffness){ return c.stiffness = stiffness; }))
-      .function("getStiffness", optional_override([](PxD6JointDrive& c){ return c.stiffness; }))
-      .function("setDamping", optional_override([](PxD6JointDrive& c, PxReal damping){ return c.damping = damping; }))
-      .function("getDamping", optional_override([](PxD6JointDrive& c){ return c.damping; }));
       ;
 
   enum_<PxD6Drive::Enum>("PxD6Drive")
