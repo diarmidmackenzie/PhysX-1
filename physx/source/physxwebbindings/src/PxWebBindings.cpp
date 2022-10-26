@@ -216,7 +216,7 @@ PxConvexMesh* createConvexMeshFromBuffer(int vertices, PxU32 vertCount, PxCookin
   return convexMesh;
 }
 
-PxTriangleMesh* createTriMesh(int vertices, PxU32 vertCount, int indices, PxU32 indexCount, bool isU16, PxCooking& cooking, PxPhysics& physics) {
+PxTriangleMesh* createTriMeshFromBuffer(int vertices, PxU32 vertCount, int indices, PxU32 indexCount, bool isU16, PxCooking& cooking, PxPhysics& physics) {
   PxTriangleMeshDesc meshDesc;
   meshDesc.points.count           = vertCount;
   meshDesc.points.stride          = sizeof(PxVec3);
@@ -231,6 +231,21 @@ PxTriangleMesh* createTriMesh(int vertices, PxU32 vertCount, int indices, PxU32 
     meshDesc.triangles.stride       = 3*sizeof(PxU32);
     meshDesc.triangles.data         = (PxU32*)indices;
   }
+
+  PxTriangleMesh* triangleMesh = cooking.createTriangleMesh(meshDesc, physics.getPhysicsInsertionCallback());
+  return triangleMesh;
+}
+
+PxTriangleMesh* createTriMesh(std::vector<PxVec3>& vertices, std::vector<PxU32> indices, PxCooking& cooking, PxPhysics& physics)
+{
+  PxTriangleMeshDesc meshDesc;
+  meshDesc.points.count           = vertices.size();
+  meshDesc.points.stride          = sizeof(PxVec3);
+  meshDesc.points.data            = vertices.data();
+
+  meshDesc.triangles.count        = indices.size();
+  meshDesc.triangles.stride       = sizeof(PxU32);
+  meshDesc.triangles.data         = indices.data();
 
   PxTriangleMesh* triangleMesh = cooking.createTriangleMesh(meshDesc, physics.getPhysicsInsertionCallback());
   return triangleMesh;
@@ -592,9 +607,13 @@ EMSCRIPTEN_BINDINGS(physx)
                                         [](PxCooking& cooking, int vertices, PxU32 vertCount, PxPhysics& physics) {
                                           return createConvexMeshFromBuffer(vertices, vertCount, cooking, physics);
                                         }), allow_raw_pointers())
-      .function("createTriMesh", optional_override(
+      .function("createTriMeshFromBuffer", optional_override(
                                         [](PxCooking& cooking, int vertices, PxU32 vertCount, int indices, PxU32 indexCount, bool isU16, PxPhysics& physics) {
-                                          return createTriMesh(vertices, vertCount, indices, indexCount, isU16, cooking, physics);
+                                          return createTriMeshFromBuffer(vertices, vertCount, indices, indexCount, isU16, cooking, physics);
+                                        }), allow_raw_pointers())
+      .function("createTriMesh", optional_override(
+                                        [](PxCooking& cooking, std::vector<PxVec3>& vertices, std::vector<PxU32>& indices, PxPhysics& physics) {
+                                          return createTriMesh(vertices, indices, cooking, physics);
                                         }), allow_raw_pointers());
   class_<PxCookingParams>("PxCookingParams").constructor<PxTolerancesScale>();
   class_<PxCpuDispatcher>("PxCpuDispatcher");
