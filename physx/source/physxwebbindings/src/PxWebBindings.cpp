@@ -341,6 +341,8 @@ EMSCRIPTEN_BINDINGS(physx)
       .function("release", &PxJoint::release)
       .function("setBreakForce", optional_override([](PxJoint& c, PxReal linear, PxReal angular) {c.setBreakForce(linear, angular);}))
       .function("setConstraintFlag", &PxJoint::setConstraintFlag)
+      .function("setProjectionLinearTolerance", &PxJoint::setProjectionLinearTolerance)
+      .function("setProjectionAngularTolerance", &PxJoint::setProjectionAngularTolerance)
       .function("getConstraint", &PxJoint::getConstraint, allow_raw_pointers());
 
   enum_<PxSphericalJointFlag::Enum>("PxSphericalJointFlag")
